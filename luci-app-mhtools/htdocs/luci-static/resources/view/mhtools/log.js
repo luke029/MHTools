@@ -92,22 +92,19 @@ return view.extend({
 		function clearLog() {
 			dp.clearLogs().then(function (r) {
 				if (r && r.success) {
-					ui.addNotification(null, E('p', '日志已清空'), 'info');
 					loadLog();
 				} else {
-					ui.addNotification(null, E('p', '清空日志失败'), 'error');
+					alert('清空日志失败：' + ((r && r.error) || '未知错误'));
 				}
-			}).catch(function () {
-				ui.addNotification(null, E('p', '清空日志失败'), 'error');
+			}).catch(function (e) {
+				alert('清空日志失败：' + (e && e.message ? e.message : '未知错误'));
 			});
 		}
 
 		function saveLimit() {
 			var val = limitInput.value || '300';
 			uci.set('mhtools', 'core', 'log_size_limit', val);
-			uci.apply().then(function () {
-				ui.addNotification(null, E('p', '自动清理设置已保存（' + val + ' KB）'), 'info');
-			});
+			uci.apply();
 		}
 
 		poll.add(function () {

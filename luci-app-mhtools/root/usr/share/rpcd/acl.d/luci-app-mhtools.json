@@ -51,6 +51,8 @@
 					"validate_profile",
 					"upload_profile",
 					"delete_profile",
+					"select_profile",
+					"reset",
 					"update_core",
 					"upgrade_core",
 					"check_core_update",
@@ -66,7 +68,6 @@
 					"save_subscriptions",
 					"get_subscriptions",
 					"update_panel",
-					"reset_to_defaults",
 					"get_mirror_latency"
 				]
 			},

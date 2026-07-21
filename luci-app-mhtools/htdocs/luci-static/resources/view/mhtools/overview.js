@@ -241,7 +241,6 @@ return view.extend({
 				dp.saveProfileContent(profileName, content).then(function (r) {
 					ui.hideModal();
 					if (r && r.success) {
-						ui.addNotification(null, E('p', '配置文件已保存'), 'info');
 						setTimeout(function () { location.reload(); }, 1000);
 					} else {
 						alert('保存失败：' + (r?.error || '未知错误'));
@@ -250,6 +249,77 @@ return view.extend({
 					ui.hideModal();
 					alert('保存失败：' + (err?.message || err));
 				});
+			});
+		}
+
+		// ===== 校验配置文件 =====
+		function openValidateModal(profileName) {
+			ui.showModal('校验配置文件：' + profileName, [
+				E('div', { 'class': 'ms-validate-loading', 'id': 'ms-validate-body', style: 'text-align:center;padding:20px;' }, [
+					E('p', {}, '正在校验，请稍候...')
+				])
+			]);
+			dp.validateProfile(profileName).then(function (r) {
+				var body = document.getElementById('ms-validate-body');
+				if (!r) { body.innerHTML = '<p style="color:#ff453a">校验失败：无返回数据</p>'; return; }
+				var syntaxClass = r.syntax ? 'ms-validate-ok' : 'ms-validate-fail';
+				var kernelClass = r.kernel ? 'ms-validate-ok' : 'ms-validate-fail';
+				var syntaxIcon = r.syntax ? '✓' : '✗';
+				var kernelIcon = r.kernel ? '✓' : '✗';
+				var syntaxText = r.syntax ? '通过' : '未通过';
+				var kernelText = r.kernel ? '通过' : (r.warnings && r.warnings.join('').indexOf('skipping kernel') >= 0 ? '跳过（无内核）' : '未通过');
+				var html = '<div style="display:flex;flex-direction:column;gap:12px;text-align:left;">';
+				html += '<div class="' + syntaxClass + '" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;">';
+				html += '<span style="font-weight:600;font-size:14px;">' + syntaxIcon + ' YAML 语法检查</span>';
+				html += '<span style="font-size:13px;opacity:.8;">' + syntaxText + '</span></div>';
+				html += '<div class="' + kernelClass + '" style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;">';
+				html += '<span style="font-weight:600;font-size:14px;">' + kernelIcon + ' Mihomo 内核校验</span>';
+				html += '<span style="font-size:13px;opacity:.8;">' + kernelText + '</span></div>';
+				if (r.errors && r.errors.length > 0) {
+					html += '<div style="margin-top:4px;"><div style="font-weight:600;font-size:13px;margin-bottom:6px;color:#ff453a;">错误</div>';
+					html += '<pre style="font-size:12px;line-height:1.5;padding:10px;background:rgba(255,69,58,.06);border-radius:6px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto;">' + escapeHtml(r.errors.join('\n')) + '</pre></div>';
+				}
+				if (r.warnings && r.warnings.length > 0) {
+					html += '<div style="margin-top:4px;"><div style="font-weight:600;font-size:13px;margin-bottom:6px;color:#ff9500;">警告</div>';
+					html += '<pre style="font-size:12px;line-height:1.5;padding:10px;background:rgba(255,149,0,.06);border-radius:6px;white-space:pre-wrap;word-break:break-all;">' + escapeHtml(r.warnings.join('\n')) + '</pre></div>';
+				}
+				html += '</div>';
+				body.innerHTML = html;
+				// 动态样式
+				var okEls = body.querySelectorAll('.ms-validate-ok');
+				for (var i = 0; i < okEls.length; i++) {
+					okEls[i].style.background = 'rgba(52,199,89,.08)';
+					okEls[i].style.color = '#34c759';
+				}
+				var failEls = body.querySelectorAll('.ms-validate-fail');
+				for (var i = 0; i < failEls.length; i++) {
+					failEls[i].style.background = 'rgba(255,69,58,.08)';
+					failEls[i].style.color = '#ff453a';
+				}
+			}).catch(function (e) {
+				var body = document.getElementById('ms-validate-body');
+				if (body) body.innerHTML = '<p style="color:#ff453a;text-align:center;">校验请求失败：' + escapeHtml(e?.message || e) + '</p>';
+			});
+		}
+
+		// ===== 下载配置文件 =====
+		function downloadProfile(profileName) {
+			dp.getProfileContent(profileName).then(function (r) {
+				if (!r || !r.success) {
+					alert('下载失败：' + (r?.error || '未知错误'));
+					return;
+				}
+				var blob = new Blob([r.content], { type: 'text/yaml;charset=utf-8' });
+				var a = document.createElement('a');
+				a.href = URL.createObjectURL(blob);
+				a.download = profileName;
+				a.style.display = 'none';
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(a.href);
+			}).catch(function (e) {
+				alert('下载失败：' + (e?.message || e));
 			});
 		}
 
@@ -278,7 +348,6 @@ return view.extend({
 								if (!confirm('选用 ' + p.name + ' 作为当前配置？')) return;
 								dp.selectProfile(p.name).then(function (r) {
 									if (r && r.success) {
-										ui.addNotification(null, E('p', '已选用 ' + p.name + (running ? '，服务已重启' : '')), 'info');
 										setTimeout(function () { location.reload(); }, 1000);
 									} else {
 										alert('选用失败：' + (r?.error || '未知错误'));
@@ -288,6 +357,15 @@ return view.extend({
 								});
 							}
 						}, '选用'),
+						E('button', {
+							'class': 'ms-act-link',
+							style: 'color:#ff9500',
+							click: function () { openValidateModal(p.name); }
+						}, '校验'),
+						E('button', {
+							'class': 'ms-act-link',
+							click: function () { downloadProfile(p.name); }
+						}, '下载'),
 						E('button', {
 							'class': 'ms-act-link danger',
 							click: function () {
@@ -311,7 +389,7 @@ return view.extend({
 					E('th', {}, '文件名'),
 					E('th', {}, '大小'),
 					E('th', {}, '修改时间'),
-					E('th', { style: 'width:130px' }, '操作')
+					E('th', { style: 'width:240px' }, '操作')
 				])),
 				E('tbody', {}, rows)
 			]);
@@ -373,7 +451,6 @@ return view.extend({
 			dp.reset().then(function (r) {
 				ui.hideModal();
 				if (r && r.success) {
-					ui.addNotification(null, E('p', r.message || '已重置'), 'info');
 					setTimeout(function () { location.reload(); }, 1000);
 				} else {
 					alert('清空失败：' + ((r && r.error) || '未知错误'));
