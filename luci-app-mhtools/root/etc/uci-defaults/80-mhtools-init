@@ -1,0 +1,12 @@
+#!/bin/sh
+
+# First-boot initialization for mhtools
+mkdir -p /etc/mhtools/profiles
+mkdir -p /etc/mhtools/run/mihomo
+mkdir -p /var/log/mhtools
+
+chmod 755 /etc/mhtools
+chmod 755 /etc/mhtools/profiles
+chmod 755 /etc/mhtools/run
+
+exit 0

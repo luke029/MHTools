@@ -1,0 +1,480 @@
+
+'use strict';
+
+import { access, popen, writefile, readfile, stat, unlink, opendir, mkdir } from 'fs';
+import { cursor } from 'uci';
+
+const profilesDir = '/etc/mhtools/profiles';
+const appLogPath = '/var/log/mhtools/app.log';
+
+function trim(s) {
+	return replace(s, /^\s+|\s+$/g, '');
+}
+
+function dateStr() {
+	let proc = popen('date "+%Y-%m-%d %H:%M:%S"');
+	if (proc) { let s = trim(proc.read('all')); proc.close(); return s; }
+	return '';
+}
+
+function appendLog(tag, msg) {
+	let logdir = '/var/log/mhtools';
+	let proc = popen('mkdir -p ' + logdir);
+	if (proc) proc.close();
+	let existing = '';
+	if (access(appLogPath, 'r')) {
+		existing = readfile(appLogPath);
+	}
+	writefile(appLogPath, existing + '[' + dateStr() + '] [' + tag + '] ' + msg + '\n');
+}
+
+function isKernelInstalled() {
+	return (system('command -v mihomo') == 0);
+}
+
+function getControllerInfo() {
+	let path = '/etc/mhtools/run/mihomo/config.yaml';
+	if (!access(path, 'r')) {
+		let uciC = cursor();
+		let profile = uciC.get('mhtools', 'core', 'profile') || '';
+		if (!profile) return { available: false, reason: 'no_profile' };
+		path = '/etc/mhtools/profiles/' + profile;
+		if (!access(path, 'r')) return { available: false, reason: 'no_file' };
+	}
+	let ctrl = '';
+	let secret = '';
+	let pc = popen("grep -E 'external-controller:' " + path + " | head -1 | sed -E 's/.*external-controller:[[:space:]]*//; s/.*://'");
+	if (pc) { ctrl = trim(pc.read('all')); pc.close(); }
+	let ps = popen("grep -E 'secret:' " + path + " | head -1 | sed -E \"s/.*secret:[[:space:]]*['\\\"\\]?([^'\\\"\\]*).*/\\1/\"");
+	if (ps) { secret = trim(ps.read('all')); ps.close(); }
+	let port = '';
+	if (ctrl) {
+		let pp = popen("echo '" + ctrl + "' | sed 's/.*://'");
+		if (pp) { port = trim(pp.read('all')); pp.close(); }
+	}
+	if (!port) return { available: false, reason: 'no_controller' };
+	return { available: true, port: port, secret: secret };
+}
+
+const methods = {
+	version: {
+		call: function () {
+			// 获取安装的内核版本
+			let core = '';
+			if (isKernelInstalled()) {
+				let proc = popen('mihomo -v 2>&1 | head -1');
+				if (proc) { core = trim(proc.read('all')); proc.close(); }
+			}
+
+			// 获取运行中的内核版本（通过 external-controller API）
+			let runningCore = '';
+			let ctrlInfo = getControllerInfo();
+			if (ctrlInfo.available) {
+				let cmd;
+				if (ctrlInfo.secret) {
+					cmd = sprintf("wget -qO- -T 2 --header='Authorization: Bearer %s' 'http://127.0.0.1:%s/version' 2>/dev/null", ctrlInfo.secret, ctrlInfo.port);
+				} else {
+					cmd = sprintf("wget -qO- -T 2 'http://127.0.0.1:%s/version' 2>/dev/null", ctrlInfo.port);
+				}
+				let proc = popen(cmd);
+				if (proc) {
+					let raw = trim(proc.read('all'));
+					proc.close();
+					if (raw && length(raw) > 0) {
+						// 尝试从 JSON 提取 version 字段
+						let m = match(raw, /"version"\s*:\s*"([^"]+)"/);
+						if (m) {
+							runningCore = m[1];
+						} else if (!match(raw, /[{}]/)) {
+							// 纯文本版本号
+							runningCore = raw;
+						}
+					}
+				}
+			}
+
+			return {
+				core: core,
+				running_core: runningCore,
+				mihomo_installed: isKernelInstalled()
+			};
+		}
+	},
+
+	status: {
+		call: function () {
+			let running = false;
+			let mihomoProc = popen("pgrep -f '/etc/mhtools/run/mihomo' 2>/dev/null");
+			if (mihomoProc) {
+				if (trim(mihomoProc.read('all'))) running = true;
+				mihomoProc.close();
+			}
+			let foreign = false;
+			let allProc = popen("pgrep -af mihomo 2>/dev/null");
+			if (allProc) {
+				let out = trim(allProc.read('all'));
+				allProc.close();
+				if (out) {
+					let lines = split(out, '\n');
+					for (let i = 0; i < length(lines); i++) {
+						if (match(lines[i], '/mihomo') && !match(lines[i], '/etc/mhtools/run/mihomo')) {
+							foreign = true;
+							break;
+						}
+					}
+				}
+			}
+			return { running: running, foreign: foreign, mihomo_installed: isKernelInstalled() };
+		}
+	},
+
+	list_profiles: {
+		call: function () {
+			let profiles = [];
+			if (access(profilesDir, 'r')) {
+				let dir = opendir(profilesDir);
+				if (dir) {
+					let name;
+					while ((name = dir.read()) != null) {
+						if (name == '.' || name == '..') continue;
+						let ext = '';
+						let dotIdx = length(name);
+						while (dotIdx > 0 && substr(name, dotIdx - 1, 1) != '.') dotIdx--;
+						if (dotIdx > 0) ext = lc(substr(name, dotIdx));
+						if (ext != 'yaml' && ext != 'yml') continue;
+						let filePath = profilesDir + '/' + name;
+						let fileStat = stat(filePath);
+						if (fileStat && fileStat.type != 'file') continue;
+						push(profiles, {
+							name: name,
+							size: fileStat ? fileStat.size : 0,
+							mtime: fileStat ? fileStat.mtime : 0
+						});
+					}
+					dir.close();
+				}
+			}
+			return { profiles: profiles };
+		}
+	},
+
+	validate_profile: {
+		args: { filename: 'filename' },
+		call: function (req) {
+			let filename = req.args?.filename;
+			let results = { syntax: false, kernel: false, errors: [], warnings: [] };
+			if (!filename) { push(results.errors, 'No filename specified'); return results; }
+			let filePath = profilesDir + '/' + filename;
+			if (!access(filePath, 'r')) { push(results.errors, 'File not found: ' + filePath); return results; }
+			let ext = '';
+			let dotIdx = length(filename);
+			while (dotIdx > 0 && substr(filename, dotIdx - 1, 1) != '.') dotIdx--;
+			if (dotIdx > 0) ext = lc(substr(filename, dotIdx));
+			if (ext != 'yaml' && ext != 'yml') {
+				push(results.errors, 'Unsupported file format: ' + ext + ' (only .yaml/.yml for Mihomo)');
+				return results;
+			}
+			if (system('command -v python3') == 0) {
+				let cmd = sprintf('python3 -c \'import sys, yaml; yaml.safe_load(open("%s")); print("OK")\' 2>&1', filePath);
+				let proc = popen(cmd);
+				if (proc) {
+					let output = trim(proc.read('all'));
+					proc.close();
+					if (output == 'OK') results.syntax = true;
+					else push(results.errors, 'YAML syntax: ' + output);
+				}
+			} else {
+				push(results.warnings, 'Python3 not available');
+				let cmd = sprintf('grep -qE "^[a-zA-Z_-]+:" "%s" 2>/dev/null', filePath);
+				if (system(cmd) == 0) results.syntax = true;
+				else push(results.errors, 'Not a valid YAML file');
+			}
+			if (isKernelInstalled()) {
+				let cmd = sprintf('mihomo -d /tmp/dp_test_%d -f "%s" -t 2>&1; rm -rf /tmp/dp_test_%d', time(), filePath, time());
+				let proc = popen(cmd);
+				if (proc) {
+					let output = trim(proc.read('all'));
+					let rc = proc.close();
+					if (rc == 0) results.kernel = true;
+					else if (output) push(results.errors, 'Mihomo check: ' + output);
+				}
+			} else {
+				push(results.warnings, 'Mihomo binary not installed, skipping kernel validation');
+			}
+			return results;
+		}
+	},
+
+	upload_profile: {
+		args: { filename: 'filename', data: 'data' },
+		call: function (req) {
+			let filename = req.args?.filename;
+			let data = req.args?.data;
+			if (!filename) return { success: false, error: '未指定文件名' };
+			if (!data) return { success: false, error: '文件内容为空' };
+			if (length(data) > 5 * 1024 * 1024) return { success: false, error: '文件过大（超过5MB）' };
+			let ext = '';
+			let dotIdx = length(filename);
+			while (dotIdx > 0 && substr(filename, dotIdx - 1, 1) != '.') dotIdx--;
+			if (dotIdx > 0) ext = lc(substr(filename, dotIdx));
+			if (ext != 'yaml' && ext != 'yml') {
+				return { success: false, error: '仅支持 .yaml / .yml 配置文件（Mihomo）' };
+			}
+			let head = substr(data, 0, 512);
+			let bad = 0;
+			for (let i = 0; i < length(head); i++) {
+				let c = ord(head, i);
+				if (c == 0 || (c < 9) || (c > 13 && c < 32)) bad++;
+			}
+			if (bad > 5) return { success: false, error: '文件内容疑似二进制数据，不是有效的配置文件' };
+			let hasKey = false;
+			let lines = split(data, "\n");
+			for (let i = 0; i < length(lines); i++) {
+				if (match(lines[i], /^[a-zA-Z0-9_.-]+\s*:/)) { hasKey = true; break; }
+			}
+			if (!hasKey) return { success: false, error: 'YAML 文件未检测到 key: value 格式' };
+			let safeName = replace(filename, /[^a-zA-Z0-9._-]/g, '_');
+			mkdir(profilesDir, 0o755);
+			let filePath = profilesDir + '/' + safeName;
+			writefile(filePath, data);
+			appendLog('upload', '配置文件已上传：' + safeName + '（' + length(data) + ' 字节）');
+			return { success: true, filename: safeName, path: filePath };
+		}
+	},
+
+	delete_profile: {
+		args: { filename: 'filename' },
+		call: function (req) {
+			let filename = req.args?.filename;
+			if (!filename) return { success: false, error: 'No filename specified' };
+			let safeName = replace(filename, /\.\.\/|\.\.\\/g, '');
+			let filePath = profilesDir + '/' + safeName;
+			if (!access(filePath, 'r')) return { success: false, error: 'File not found' };
+			let uciC = cursor();
+			let currentProfile = uciC.get('mhtools', 'core', 'profile') || '';
+			if (currentProfile == safeName) {
+				// 如果是当前选中配置，先停服务再清空 UCI
+				system('/etc/init.d/mhtools stop');
+				uciC.set('mhtools', 'core', 'profile', '');
+				uciC.set('mhtools', 'core', 'enabled', '0');
+				uciC.commit('mhtools');
+			}
+			unlink(filePath);
+			appendLog('delete', '配置文件已删除：' + safeName);
+			return { success: true };
+		}
+	},
+
+	select_profile: {
+		args: { filename: 'filename' },
+		call: function (req) {
+			let filename = req.args?.filename;
+			if (!filename) return { success: false, error: '未指定文件名' };
+			let safeName = replace(filename, /\.\.\/|\.\.\\/g, '');
+			let filePath = profilesDir + '/' + safeName;
+			if (!access(filePath, 'r')) return { success: false, error: '文件不存在' };
+			let uciC = cursor();
+			uciC.set('mhtools', 'core', 'profile', safeName);
+			uciC.commit('mhtools');
+			appendLog('select', '选用配置文件：' + safeName);
+			// 如果服务正在运行则重启
+			let running = false;
+			let proc = popen("pgrep -f '/etc/mhtools/run/mihomo' 2>/dev/null");
+			if (proc) { if (trim(proc.read('all'))) running = true; proc.close(); }
+			if (running) {
+				system('/etc/init.d/mhtools restart');
+				appendLog('select', '服务已重启以应用新配置');
+			}
+			return { success: true, filename: safeName };
+		}
+	},
+
+	restart: {
+		call: function () {
+			if (!isKernelInstalled()) {
+				return { success: false, error: 'Mihomo 内核未安装。请手动上传到 /usr/bin/mihomo' };
+			}
+			let rc = system('/etc/init.d/mhtools restart');
+			return { success: (rc == 0) };
+		}
+	},
+
+	start: {
+		call: function () {
+			if (!isKernelInstalled()) {
+				return { success: false, error: 'Mihomo 内核未安装。请手动上传到 /usr/bin/mihomo' };
+			}
+			let uciC = cursor();
+			let profile = uciC.get('mhtools', 'core', 'profile') || '';
+			if (!profile) {
+				return { success: false, error: '未选择配置文件，请先上传 YAML 并选用' };
+			}
+			let profilePath = '/etc/mhtools/profiles/' + profile;
+			if (!access(profilePath, 'r')) {
+				return { success: false, error: '配置文件不存在：' + profile + '，请重新上传' };
+			}
+			let rc = system('/etc/init.d/mhtools start');
+			if (rc != 0) {
+				return { success: false, error: '服务启动失败，请查看系统日志了解详情' };
+			}
+			system('sleep 2');
+			let running = false;
+			let proc = popen("pgrep -f '/etc/mhtools/run/mihomo' 2>/dev/null");
+			if (proc) {
+				if (trim(proc.read('all'))) running = true;
+				proc.close();
+			}
+			if (!running) {
+				let lastError = '';
+				if (access('/var/log/mhtools/app.log', 'r')) {
+					let p = popen('grep -E "FAILED|failed|not found|error" /var/log/mhtools/app.log 2>/dev/null | tail -3');
+					if (p) { lastError = trim(p.read('all')); p.close(); }
+				}
+				return { success: false, error: '服务启动后未检测到运行中进程' + (lastError ? '：' + lastError : '，请查看系统日志') };
+			}
+			return { success: true };
+		}
+	},
+
+	stop: {
+		call: function () {
+			let rc = system('/etc/init.d/mhtools stop');
+			return { success: (rc == 0) };
+		}
+	},
+
+	set_enabled: {
+		args: { value: 'value' },
+		call: function (req) {
+			let val = req.args?.value;
+			let v = (val == true || val == '1' || val == 1) ? '1' : '0';
+			let uciC = cursor();
+			uciC.set('mhtools', 'core', 'enabled', v);
+			uciC.commit('mhtools');
+			return { success: true, enabled: v };
+		}
+	},
+
+	get_dashboard_url: {
+		call: function () {
+			let info = getControllerInfo();
+			if (!info.available) return { available: false, reason: info.reason };
+			return { available: true, port: info.port, secret: info.secret };
+		}
+	},
+
+	get_all_logs: {
+		args: { lines: 'lines' },
+		call: function (req) {
+			let lines = (req.args && req.args.lines != null) ? int(req.args.lines) : 300;
+			let parts = [];
+
+			let running = false;
+			let mihomoProc = popen('pgrep mihomo 2>/dev/null');
+			if (mihomoProc) { if (trim(mihomoProc.read('all'))) running = true; mihomoProc.close(); }
+
+			if (running) {
+				let kernelLog = '';
+				let logPath = '/var/log/mhtools/mihomo.log';
+				let hasLogFile = access(logPath, 'r');
+				if (hasLogFile) {
+					let proc = popen('tail -n ' + lines + ' ' + logPath);
+					if (proc) { kernelLog = proc.read('all'); proc.close(); }
+				}
+				if (!hasLogFile && (!kernelLog || !trim(kernelLog))) {
+					let proc = popen('logread 2>/dev/null | grep -iE "mihomo|mhtools" | tail -n ' + lines);
+					if (proc) { kernelLog = proc.read('all'); proc.close(); }
+				}
+				if (kernelLog && trim(kernelLog)) {
+					push(parts, '===== 内核运行日志（Mihomo）=====');
+					push(parts, kernelLog);
+				} else {
+					push(parts, '===== 内核运行中，暂无输出 =====');
+				}
+			} else {
+				push(parts, '===== 内核未运行 =====');
+			}
+
+			if (access(appLogPath, 'r')) {
+				let proc = popen('tail -n 50 ' + appLogPath);
+				if (proc) {
+					let log = proc.read('all');
+					proc.close();
+					if (log && trim(log)) {
+						push(parts, '');
+						push(parts, '===== 应用日志（MHTools 启动/停止）=====');
+						push(parts, log);
+					}
+				}
+			}
+
+			return { log: join('\n', parts) };
+		}
+	},
+
+	get_profile_content: {
+		args: { filename: 'filename' },
+		call: function (req) {
+			let filename = req.args?.filename;
+			if (!filename) return { success: false, error: '未指定文件名' };
+			let safeName = replace(filename, /\.\.\/|\.\.\\/g, '');
+			let filePath = profilesDir + '/' + safeName;
+			if (!access(filePath, 'r')) return { success: false, error: '文件不存在' };
+			let content = readfile(filePath);
+			return { success: true, filename: safeName, content: content };
+		}
+	},
+
+	save_profile_content: {
+		args: { filename: 'filename', data: 'data' },
+		call: function (req) {
+			let filename = req.args?.filename;
+			let data = req.args?.data;
+			if (!filename) return { success: false, error: '未指定文件名' };
+			if (!data) return { success: false, error: '文件内容为空' };
+			if (length(data) > 5 * 1024 * 1024) return { success: false, error: '文件过大（超过5MB）' };
+			let safeName = replace(filename, /\.\.\/|\.\.\\/g, '');
+			let filePath = profilesDir + '/' + safeName;
+			if (!access(filePath, 'r')) return { success: false, error: '文件不存在' };
+			writefile(filePath, data);
+			appendLog('edit', '配置文件已编辑保存：' + safeName + '（' + length(data) + ' 字节）');
+			// 如果编辑的是当前选中配置且服务正在运行，自动重启
+			let uciC = cursor();
+			let currentProfile = uciC.get('mhtools', 'core', 'profile') || '';
+			if (currentProfile == safeName) {
+				let running = false;
+				let proc = popen("pgrep -f '/etc/mhtools/run/mihomo' 2>/dev/null");
+				if (proc) { if (trim(proc.read('all'))) running = true; proc.close(); }
+				if (running) {
+					system('/etc/init.d/mhtools restart');
+					appendLog('edit', '当前配置已更新，服务已重启');
+				}
+			}
+			return { success: true, filename: safeName };
+		}
+	},
+
+	clear_logs: {
+		call: function () {
+			let logFiles = ['/var/log/mhtools/app.log', '/var/log/mhtools/mihomo.log'];
+			for (let i = 0; i < length(logFiles); i++) writefile(logFiles[i], '');
+			return { success: true };
+		}
+	},
+
+	reset: {
+		call: function () {
+			system('/etc/init.d/mhtools stop');
+			system('rm -f /etc/mhtools/profiles/*.yaml /etc/mhtools/profiles/*.yml 2>/dev/null');
+			let uciC = cursor();
+			uciC.set('mhtools', 'core', 'enabled', '0');
+			uciC.set('mhtools', 'core', 'profile', '');
+			uciC.commit('mhtools');
+			system('rm -rf /etc/mhtools/run/mihomo/config.* 2>/dev/null');
+			appendLog('reset', '已清空所有配置文件');
+			return { success: true, message: '已清空所有配置。请上传配置文件后启动服务。' };
+		}
+	}
+};
+
+return { 'luci.mhtools': methods };

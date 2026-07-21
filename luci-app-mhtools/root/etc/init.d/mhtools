@@ -1,0 +1,287 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=10
+USE_PROCD=1
+
+# 内核二进制需手动上传到 /usr/bin/mihomo
+# 下载：https://github.com/MetaCubeX/mihomo/releases
+MIHOMO_BIN="/usr/bin/mihomo"
+MHTOOLS_DIR="/etc/mhtools"
+PROFILES_DIR="$MHTOOLS_DIR/profiles"
+RUN_DIR="$MHTOOLS_DIR/run/mihomo"
+LOG_DIR="/var/log/mhtools"
+
+_mhtools_log() {
+	local tag="$1"
+	local msg="$2"
+	local logfile="$LOG_DIR/app.log"
+	mkdir -p "$LOG_DIR"
+	echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$tag] $msg" >> "$logfile"
+	logger -t "mhtools" "[$tag] $msg"
+}
+
+_validate_mihomo() {
+	local config_file="$1"
+	local binary="$2"
+	if [ ! -x "$binary" ]; then
+		_mhtools_log "Validate" "Mihomo binary not found: $binary"
+		return 1
+	fi
+	local tmpdir; tmpdir="$RUN_DIR/test_$$"
+	mkdir -p "$tmpdir"
+	local output; output=$("$binary" -d "$tmpdir" -f "$config_file" -t 2>&1)
+	local rc=$?
+	rm -rf "$tmpdir"
+	if [ $rc -ne 0 ]; then
+		_mhtools_log "Validate" "Mihomo config validation FAILED:"
+		echo "$output" | while IFS= read -r line; do
+			_mhtools_log "Validate" "  $line"
+		done
+		return 1
+	fi
+	_mhtools_log "Validate" "Mihomo config validation passed."
+	return 0
+}
+
+_validate_yaml_syntax() {
+	local config_file="$1"
+	if command -v python3 > /dev/null 2>&1; then
+		python3 -c "
+import sys, yaml
+try:
+	with open('$config_file', 'r') as f:
+		data = yaml.safe_load(f)
+	if data is None:
+		print('ERROR: Empty or invalid YAML document')
+		sys.exit(1)
+	print('OK')
+except Exception as e:
+	print('ERROR: ' + str(e))
+	sys.exit(1)
+" 2>&1
+		return $?
+	fi
+	if ! grep -qE '^[a-zA-Z_-]+:' "$config_file" 2>/dev/null; then
+		echo "ERROR: No valid YAML structure detected"
+		return 1
+	fi
+	echo "WARNING: Python3 not available, only basic YAML check performed"
+	return 0
+}
+
+_prepare_dirs() {
+	mkdir -p "$PROFILES_DIR"
+	mkdir -p "$RUN_DIR/proxies"
+	mkdir -p "$LOG_DIR"
+}
+
+# 清理 mihomo 运行时添加的 TUN 设备和 nftables 残留规则
+_cleanup_mihomo() {
+	_mhtools_log "Cleanup" "Cleaning up mihomo runtime artifacts..."
+
+	# 清理 TUN 设备
+	if ip link show nikki >/dev/null 2>&1; then
+		ip link delete nikki 2>/dev/null && _mhtools_log "Cleanup" "TUN device nikki deleted" || true
+	fi
+
+	# 清理 mihomo 可能残留的 nftables divert 表
+	if nft list table inet divert >/dev/null 2>&1; then
+		nft flush table inet divert 2>/dev/null
+		nft delete table inet divert 2>/dev/null
+		_mhtools_log "Cleanup" "nftables divert table cleaned"
+	fi
+
+	# 清理 mihomo 可能残留的 nftables mihomo 表
+	if nft list table inet mihomo >/dev/null 2>&1; then
+		nft flush table inet mihomo 2>/dev/null
+		nft delete table inet mihomo 2>/dev/null
+		_mhtools_log "Cleanup" "nftables mihomo table cleaned"
+	fi
+
+	# 检查是否有残留的 TUN 路由规则（198.18.0.0/16 fake-ip 路由）
+	local fake_route
+	fake_route=$(ip route show 198.18.0.0/16 2>/dev/null)
+	if [ -n "$fake_route" ]; then
+		ip route del 198.18.0.0/16 2>/dev/null || true
+		_mhtools_log "Cleanup" "Fake-IP route cleaned"
+	fi
+
+	_mhtools_log "Cleanup" "Cleanup done."
+}
+
+boot() {
+	boot_func < /dev/null > /dev/null 2>&1 &
+}
+
+boot_func() {
+	_prepare_dirs
+	config_load mhtools
+	local enabled
+	config_get_bool enabled "core" "enabled" 0
+	if [ "$enabled" = 1 ]; then
+		start
+	fi
+}
+
+start_service() {
+	_prepare_dirs
+	config_load mhtools
+
+	local enabled profile
+	config_get_bool enabled "core" "enabled" 0
+	config_get profile "core" "profile" ""
+
+	if [ "$enabled" = 0 ]; then
+		_mhtools_log "App" "Service is disabled. Exit."
+		return 1
+	fi
+
+	if [ ! -x "$MIHOMO_BIN" ]; then
+		_mhtools_log "App" "Mihomo binary not found: $MIHOMO_BIN"
+		_mhtools_log "App" "Please upload mihomo binary to /usr/bin/mihomo"
+		return 1
+	fi
+
+	local profile_path=""
+	if [ -n "$profile" ]; then
+		profile_path="$PROFILES_DIR/$profile"
+	fi
+
+	if [ -z "$profile_path" ] || [ ! -f "$profile_path" ]; then
+		_mhtools_log "App" "Profile not found: $profile_path"
+		_mhtools_log "App" "Please upload a config file first."
+		return 1
+	fi
+
+	case "$profile" in
+		*.yaml|*.yml) ;;
+		*)
+			_mhtools_log "App" "Mihomo requires .yaml config, got: $profile"
+			return 1
+			;;
+	esac
+
+	_mhtools_log "App" "Using profile: $profile"
+
+	local syntax_ok=0
+	local kernel_ok=0
+
+	if _validate_yaml_syntax "$profile_path"; then
+		syntax_ok=1
+	else
+		_mhtools_log "Validate" "YAML syntax check FAILED"
+	fi
+	if _validate_mihomo "$profile_path" "$MIHOMO_BIN"; then
+		kernel_ok=1
+	else
+		_mhtools_log "Validate" "Mihomo kernel check FAILED"
+	fi
+
+	if [ $syntax_ok -eq 0 ] || [ $kernel_ok -eq 0 ]; then
+		_mhtools_log "App" "Config validation failed. Service will not start."
+		return 1
+	fi
+
+	_mhtools_log "App" "Config validation passed."
+
+	local run_config="$RUN_DIR/config.yaml"
+	cp -f "$profile_path" "$run_config"
+	_mhtools_log "App" "Config copied to: $run_config"
+
+	_mhtools_log "Core" "Starting mihomo..."
+
+	procd_open_instance mhtools
+	procd_set_param respawn
+
+	# 始终将 mihomo 输出重定向至日志文件，确保日志查看器可读取
+	local mihomo_log="$LOG_DIR/mihomo.log"
+	mkdir -p "$LOG_DIR"
+	touch "$mihomo_log"
+	procd_set_param command /bin/sh -c "exec \"$MIHOMO_BIN\" -d \"$RUN_DIR\" -f \"$run_config\" >> \"$mihomo_log\" 2>&1"
+
+	procd_close_instance
+
+	_mhtools_log "Core" "Mihomo started."
+}
+
+service_started() {
+	_mhtools_log "App" "Service started successfully."
+}
+
+stop_service() {
+	_mhtools_log "Core" "Stopping mihomo..."
+
+	# 先发 SIGTERM（优雅退出）
+	pkill -x mihomo 2>/dev/null || true
+
+	# 等待进程退出（最多 5 秒）
+	local wait=0
+	while [ $wait -lt 5 ]; do
+		if ! pgrep -x mihomo >/dev/null 2>&1; then
+			break
+		fi
+		sleep 1
+		wait=$((wait + 1))
+	done
+
+	# 如果还在跑，强制杀
+	if pgrep -x mihomo >/dev/null 2>&1; then
+		_mhtools_log "Core" "Mihomo did not exit gracefully, sending SIGKILL"
+		pkill -9 -x mihomo 2>/dev/null || true
+		sleep 1
+	fi
+
+	# 清理 TUN 和 nftables 残余
+	_cleanup_mihomo
+
+	_mhtools_log "Core" "Mihomo stopped."
+}
+
+service_stopped() {
+	_mhtools_log "App" "Service stopped."
+	if [ -d "$RUN_DIR" ]; then
+		rm -f "$RUN_DIR"/config.*
+	fi
+}
+
+reload_service() {
+	stop
+	start
+}
+
+# 注意：已移除 service_triggers，避免 UCI 保存时自动重载导致与前端开关操作产生竞态。
+# 启停控制完全由前端显式调用 start/stop 完成。
+
+extra_command 'validate_profile' 'Validate a config profile without starting the service'
+validate_profile() {
+	_prepare_dirs
+	config_load mhtools
+	local profile
+	config_get profile "core" "profile" ""
+	if [ -n "$1" ]; then profile="$1"; fi
+	local profile_path="$PROFILES_DIR/$profile"
+	if [ ! -f "$profile_path" ]; then
+		echo "Profile not found: $profile_path"
+		return 1
+	fi
+	echo "=== Validating mihomo config: $profile_path ==="
+	echo "--- YAML Syntax Check ---"
+	_validate_yaml_syntax "$profile_path"
+	if [ -x "$MIHOMO_BIN" ]; then
+		echo "--- Mihomo Kernel Check ---"
+		_validate_mihomo "$profile_path" "$MIHOMO_BIN"
+	else
+		echo "WARNING: $MIHOMO_BIN not found, skipping kernel check"
+	fi
+}
+
+extra_command 'list_profiles' 'List all uploaded config profiles'
+list_profiles() {
+	if [ -d "$PROFILES_DIR" ]; then
+		echo "=== Mihomo Profiles (.yaml/.yml) ==="
+		find "$PROFILES_DIR" -maxdepth 1 \( -name "*.yaml" -o -name "*.yml" \) -printf "  %f\n" 2>/dev/null || echo "  (none)"
+	else
+		echo "Profiles directory not found: $PROFILES_DIR"
+	fi
+}

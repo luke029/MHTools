@@ -1,0 +1,4 @@
+config core 'core'
+	option enabled '0'
+	option profile ''
+	option log_size_limit '300'

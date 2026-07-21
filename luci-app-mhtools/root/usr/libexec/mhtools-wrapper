@@ -1,0 +1,13 @@
+#!/bin/sh
+# MHTools mihomo kernel wrapper
+# Args: <binary> <run_dir> <run_config> <log_file>
+BINARY="${1:-/usr/bin/mihomo}"
+RUN_DIR="${2:-/etc/mhtools/run/mihomo}"
+RUN_CONFIG="${3:-/etc/mhtools/run/mihomo/config.yaml}"
+LOG_FILE="${4:-/var/log/mhtools/mihomo.log}"
+
+mkdir -p "$(dirname "$LOG_FILE")"
+# 确保日志文件存在（即使内核暂无输出，前端也能读到文件而非回退）
+: >> "$LOG_FILE"
+
+exec "$BINARY" -d "$RUN_DIR" -f "$RUN_CONFIG" >> "$LOG_FILE" 2>&1

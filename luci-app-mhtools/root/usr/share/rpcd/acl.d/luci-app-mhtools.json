@@ -1,0 +1,89 @@
+{
+	"luci-app-mhtools": {
+		"description": "Grant access to LuCI MHTools procedures",
+		"read": {
+			"ubus": {
+				"luci.mhtools": [
+					"status",
+					"version",
+					"list_profiles",
+					"validate_profile",
+					"check_core_update",
+					"get_dashboard_url",
+					"get_arch",
+					"get_all_logs",
+					"clear_logs",
+					"get_profile_content",
+					"get_template",
+					"fetch_subscription",
+					"get_subscriptions",
+					"update_panel",
+					"get_mirror_latency"
+				]
+			},
+			"uci": [
+				"mhtools"
+			],
+			"file": {
+				"/etc/mhtools/profiles/*": [
+					"list",
+					"read"
+				],
+				"/etc/mhtools/run/*": [
+					"list",
+					"read"
+				],
+				"/var/log/mhtools/*": [
+					"read"
+				]
+			}
+		},
+		"write": {
+			"ubus": {
+				"luci.mhtools": [
+					"status",
+					"restart",
+					"start",
+					"stop",
+					"set_enabled",
+					"version",
+					"list_profiles",
+					"validate_profile",
+					"upload_profile",
+					"delete_profile",
+					"update_core",
+					"upgrade_core",
+					"check_core_update",
+					"get_dashboard_url",
+					"get_arch",
+					"get_all_logs",
+					"clear_logs",
+					"get_profile_content",
+					"save_profile_content",
+					"get_template",
+					"fetch_subscription",
+					"save_config",
+					"save_subscriptions",
+					"get_subscriptions",
+					"update_panel",
+					"reset_to_defaults",
+					"get_mirror_latency"
+				]
+			},
+			"uci": [
+				"mhtools"
+			],
+			"file": {
+				"/etc/mhtools/profiles/*": [
+					"write"
+				],
+				"/etc/mhtools/run/*": [
+					"write"
+				],
+				"/var/log/mhtools/*": [
+					"write"
+				]
+			}
+		}
+	}
+}
