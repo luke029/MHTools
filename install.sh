@@ -137,7 +137,7 @@ record() { echo "$1" >> "$MANIFEST"; }
 
 # 拷贝 htdocs (LuCI 前端 JS/CSS) 并记录清单
 if [ -d "$SRC_DIR/htdocs" ]; then
-	( cd "$SRC_DIR/htdocs" && find . -type f -not -name '.DS_Store' ) | while read -r f; do
+	( cd "$SRC_DIR/htdocs" && find . -type f ! -name '.DS_Store' ) | while read -r f; do
 		f="${f#./}"
 		tgt="/www/$f"
 		mkdir -p "$(dirname "$tgt")"
@@ -151,7 +151,7 @@ fi
 if [ -d "$SRC_DIR/root" ]; then
 	for dir in etc usr; do
 		if [ -d "$SRC_DIR/root/$dir" ]; then
-			( cd "$SRC_DIR/root/$dir" && find . -type f -not -name '.DS_Store' ) | while read -r f; do
+			( cd "$SRC_DIR/root/$dir" && find . -type f ! -name '.DS_Store' ) | while read -r f; do
 				f="${f#./}"
 				tgt="/$dir/$f"
 				mkdir -p "$(dirname "$tgt")"
