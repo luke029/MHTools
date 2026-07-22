@@ -1,0 +1,13 @@
+C:28739a7ec77e874fae0672fc55e6392366190f1ab31e35b7495f2e5be44867dd
+P:luci-app-mhtools
+V:2.0.3-r1
+A:aarch64_cortex-a53
+S:19936
+I:69573
+T:MHTools - Mihomo TProxy 管理面板 for OpenWRT LuCI
+L:GPL-3.0
+o:luke029/MHTools
+m:luke029
+U:https://github.com/luke029/MHTools
+D:libc mihomo
+

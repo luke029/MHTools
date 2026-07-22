@@ -1,0 +1,1 @@
+{"pkgname": "luci-app-mhtools", "pkgver": "2.0.3-r1", "arch": "aarch64_cortex-a53", "pkgdesc": "MHTools - Mihomo TProxy \u7ba1\u7406\u9762\u677f for OpenWRT LuCI", "license": "GPL-3.0", "origin": "luke029/MHTools", "maintainer": "luke029", "url": "https://github.com/luke029/MHTools", "size": 69573, "depends": ["libc", "mihomo"]}
