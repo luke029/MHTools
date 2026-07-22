@@ -1,14 +1,8 @@
-name: Build APK
+name: Build & Release
 
 on:
   push:
-    tags:
-      - 'v*'
-
-permissions:
-  contents: write
-  pages: write
-  id-token: write
+    tags: ['v*']
 
 jobs:
   build:
@@ -16,30 +10,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build APK (Release 版：无签名，可直接上传安装)
+      - name: Build tarball
         run: |
-          mkdir -p dist/release dist/packages
-          python3 scripts/build_apk.py -o dist/release/luci-app-mhtools.apk
-
-      - name: Setup signing & Build signed APK (Feed 版)
-        run: |
-          echo "${{ secrets.APK_SIGNING_KEY }}" > /tmp/signing.key
-          cp scripts/mhtools-signing.pub dist/packages/public.key
-          python3 scripts/build_apk.py \
-            --sign-key /tmp/signing.key \
-            -o dist/packages/luci-app-mhtools.apk
-
-      - name: Generate APKINDEX
-        run: python3 scripts/generate_index.py dist/packages/ dist/packages/
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          force_orphan: true
+          chmod +x scripts/build_release.py
+          python3 scripts/build_release.py -o mhtools-release.tar.gz
+          ls -lh mhtools-release.tar.gz
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/release/*.apk
+          files: mhtools-release.tar.gz
