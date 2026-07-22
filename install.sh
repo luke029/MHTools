@@ -34,17 +34,18 @@ echo ""
 # Step 1: 依赖检测与安装
 # ============================================================
 
-# --- kmod-tun ---
+# --- 基础系统依赖：只做轻量化、OpenWrt 25.12.1 可用包聚合 ---
 if [ ! -e /dev/net/tun ]; then
-	warn "TUN kernel module not found. Installing kmod-tun..."
+	warn "TUN kernel module not found. Installing required runtime dependencies..."
 	if command -v apk >/dev/null 2>&1; then
-		apk add kmod-tun
-		modprobe tun
+		apk update
+		apk add --no-cache kmod-tun nftables python3-yaml ca-certificates wget-ssl curl
+		modprobe tun 2>/dev/null || true
 	elif command -v opkg >/dev/null 2>&1; then
 		opkg update
-		opkg install kmod-tun
+		opkg install kmod-tun nftables python3-yaml ca-certificates wget curl
 	else
-		error "Cannot install kmod-tun: neither apk nor opkg found."
+		error "Cannot install runtime dependencies: neither apk nor opkg found."
 		exit 1
 	fi
 else
@@ -52,8 +53,10 @@ else
 fi
 
 # --- mihomo 内核（获取策略：复用 > 镜像下载 > 手动兜底）---
+# 说明：本项目只做 LuCI 管理层；mihomo 内核保持外置，不打包到安装文件中。
 MIHOMO_BIN="/usr/bin/mihomo"
-MIHOMO_VER="v1.19.29"  # 当前推荐版本
+MIHOMO_VER="${MIHOMO_VER:-v1.19.29}"
+MIHOMO_CHANNEL="${MIHOMO_CHANNEL:-stable}"
 
 # 1) 复用：已存在 /usr/bin/mihomo 直接复用；否则把 PATH 中的
 #    clash-meta / mihomo 软链到 /usr/bin/mihomo（服务默认读这个路径）
@@ -85,6 +88,9 @@ https://github.com/${REL}
 https://ghproxy.net/https://github.com/${REL}
 https://mirror.ghproxy.com/https://github.com/${REL}
 "
+	if [ "$MIHOMO_CHANNEL" = "alpha" ] || printf '%s' "$MIHOMO_VER" | grep -qi 'alpha'; then
+		warn "Alpha channel requested. Download URL will use the provided MIHOMO_VER value directly."
+	fi
 	DOWNLOADED=""
 	for url in $MIRRORS; do
 		info "Trying mirror: $url"

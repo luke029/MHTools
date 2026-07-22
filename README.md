@@ -2,21 +2,33 @@
 
 OpenWrt / ImmortalWrt 上管理 [mihomo](https://github.com/MetaCubeX/mihomo) 代理的 LuCI 应用。
 
+本项目当前采用“轻量 LuCI 管理层 + 外部 mihomo 内核”的实现方式：
+- LuCI 页面只负责上传 YAML、启动/停止、状态和日志
+- `mihomo` 二进制保持外置
+- 运行时依赖通过系统包管理器自动补齐
+- 不再把内核打进包里，也不再依赖复杂 SDK 编译链
+
 ## 安装
 
 ```bash
 # 下载并解压
-wget https://github.com/luke029/MHTools/releases/latest/download/mhtools-v2.0.3.tar.gz
-tar xzf mhtools-v2.0.3.tar.gz
+wget https://github.com/luke029/MHTools/releases/latest/download/mhtools-v2.1.0.tar.gz
+tar xzf mhtools-v2.1.0.tar.gz
 
 # 一键安装（自动处理依赖）
 sh install.sh
 ```
 
 `install.sh` 会自动：
-- 检测并安装 `kmod-tun`（通过系统包管理器）
-- 获取 mihomo 内核二进制（**优先复用**已存在的 mihomo/clash-meta，否则依次尝试官方源与 GitHub 代理镜像下载；全部失败则跳过下载、不阻断 LuCI 安装，稍后手动放置即可）
+- 通过当前系统包管理器安装基础依赖（`apk` 优先）：`kmod-tun`、`nftables`、`python3-yaml`、`ca-certificates`、`wget-ssl`、`curl`
+- 复用已有 `/usr/bin/mihomo`；若不存在则尝试下载对应架构的二进制
 - 拷贝所有文件、注册服务，并生成安装清单 `/usr/share/mhtools/manifest`
+
+如果你要下载 `alpha` 内核版本，可以在安装前设置：
+
+```sh
+MIHOMO_CHANNEL=alpha MIHOMO_VER=vX.Y.Z-alpha sh install.sh
+```
 
 ## 卸载
 
