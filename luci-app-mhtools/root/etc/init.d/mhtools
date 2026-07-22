@@ -189,15 +189,24 @@ start_service() {
 	cp -f "$profile_path" "$run_config"
 	_mhtools_log "App" "Config copied to: $run_config"
 
+	# 向运行时配置注入 log-file，让 mihomo 将完整运行日志写入我们的日志文件
+	local mihomo_log="$LOG_DIR/mihomo.log"
+	mkdir -p "$LOG_DIR"
+	touch "$mihomo_log"
+	if ! grep -q "^log-file:" "$run_config" 2>/dev/null; then
+		{
+			echo "# Runtime log file (MHTools injected)"
+			echo "log-file: $mihomo_log"
+			cat "$run_config"
+		} > /tmp/mhtools_config_temp 2>/dev/null && mv /tmp/mhtools_config_temp "$run_config"
+	fi
+
 	_mhtools_log "Core" "Starting mihomo..."
 
 	procd_open_instance mhtools
 	procd_set_param respawn
 
 	# 始终将 mihomo 输出重定向至日志文件，确保日志查看器可读取
-	local mihomo_log="$LOG_DIR/mihomo.log"
-	mkdir -p "$LOG_DIR"
-	touch "$mihomo_log"
 	procd_set_param command /bin/sh -c "exec \"$MIHOMO_BIN\" -d \"$RUN_DIR\" -f \"$run_config\" >> \"$mihomo_log\" 2>&1"
 
 	procd_close_instance
