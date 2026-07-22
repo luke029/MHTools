@@ -372,6 +372,14 @@ const methods = {
 
 			// 应用日志
 			if (access(appLogPath, 'r')) {
+				let sizeProc = popen('wc -c < ' + appLogPath);
+				if (sizeProc) {
+					let size = int(trim(sizeProc.read('all')));
+					sizeProc.close();
+					if (size > 500 * 1024) {
+						system('tail -n 200 ' + appLogPath + ' > /tmp/.mhtools_app_trunc 2>/dev/null && mv /tmp/.mhtools_app_trunc ' + appLogPath + ' 2>/dev/null || true');
+					}
+				}
 				let proc = popen('tail -n 50 ' + appLogPath);
 				if (proc) { appLog = trim(proc.read('all')); proc.close(); }
 			}
@@ -382,6 +390,19 @@ const methods = {
 			if (mihomoProc) { if (trim(mihomoProc.read('all'))) running = true; mihomoProc.close(); }
 
 			if (running) {
+				// 自动清理：日志文件超过 500KB 时截断至最近 500 行
+				let logPath = '/var/log/mhtools/mihomo.log';
+				if (access(logPath, 'r')) {
+					let sizeProc = popen('wc -c < ' + logPath);
+					if (sizeProc) {
+						let size = int(trim(sizeProc.read('all')));
+						sizeProc.close();
+						if (size > 500 * 1024) {
+							system('tail -n 500 ' + logPath + ' > /tmp/.mhtools_log_trunc 2>/dev/null && mv /tmp/.mhtools_log_trunc ' + logPath + ' 2>/dev/null || true');
+						}
+					}
+				}
+
 				// 方式一：通过 mihomo API 获取实时运行日志
 				let ctrlInfo = getControllerInfo();
 				let apiLogs = '';
@@ -426,7 +447,6 @@ const methods = {
 				}
 
 				if (!kernelLog) {
-					let logPath = '/var/log/mhtools/mihomo.log';
 					if (access(logPath, 'r')) {
 						let proc = popen('tail -n ' + lines + ' ' + logPath);
 						if (proc) { kernelLog = trim(proc.read('all')); proc.close(); }
