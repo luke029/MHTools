@@ -171,6 +171,15 @@ mkdir -p /etc/mhtools/profiles
 mkdir -p /etc/mhtools/run/mihomo/proxies
 mkdir -p /var/log/mhtools
 
+# 写入应用版本信息，供前端展示和升级检查
+if [ -f VERSION ]; then
+	cp -f VERSION /etc/mhtools/version
+	chmod 644 /etc/mhtools/version
+	info "Application version file installed."
+else
+	warn "VERSION file not found in the install root; skipping version metadata copy."
+fi
+
 # 权限
 chmod 755 /etc/mhtools /etc/mhtools/profiles /etc/mhtools/run
 chmod 755 /etc/config/mhtools 2>/dev/null || true

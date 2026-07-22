@@ -8,10 +8,19 @@
 
 var CSS = [
 	'.ms-wrap{padding:14px 0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI","PingFang SC",sans-serif;color:#1d1d1f}',
-	'.ms-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px;align-items:stretch}',
+	'.ms-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);gap:20px;margin-bottom:16px;align-items:stretch}',
 	'.ms-col{display:flex;flex-direction:column;height:100%}',
-	'.ms-card{border-radius:16px;padding:20px;background:rgba(255,255,255,.72);backdrop-filter:saturate(180%) blur(20px);box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.05);height:100%;display:flex;flex-direction:column}',
-	'.ms-card-title{font-size:15px;font-weight:600;margin-bottom:14px;letter-spacing:-.01em}',
+	'.ms-card{border-radius:16px;padding:20px;background:rgba(255,255,255,.72);backdrop-filter:saturate(180%) blur(20px);box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.05);border:1px solid rgba(0,0,0,.06);height:100%;display:flex;flex-direction:column}',
+	'.ms-shell-card{border-radius:18px;padding:18px 20px;background:rgba(255,255,255,.72);backdrop-filter:saturate(180%) blur(20px);box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.05);border:1px solid rgba(0,0,0,.06);margin-bottom:16px}',
+	'.ms-shell-head{display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid rgba(0,0,0,.06)}',
+	'.ms-shell-title{font-size:18px;font-weight:700;letter-spacing:-.02em}',
+	'.ms-shell-actions{display:flex;align-items:center;gap:10px}',
+	'.ms-shell-body{display:flex;flex-direction:column}',
+	'.ms-shell-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;min-height:48px;padding:8px 0}',
+	'.ms-shell-row + .ms-shell-row{border-top:1px solid rgba(0,0,0,.04)}',
+	'.ms-shell-label{font-size:14px;font-weight:600;color:#1d1d1f}',
+	'.ms-shell-value{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:#1d1d1f}',
+	'.ms-shell-meta{display:flex;align-items:center;gap:10px}',
 	'.ms-svc-section{padding-bottom:14px;margin-bottom:14px;border-bottom:1px solid rgba(0,0,0,.06)}',
 	'.ms-svc-row{display:flex;align-items:center;justify-content:space-between}',
 	'.ms-svc-name{font-size:17px;font-weight:600;letter-spacing:-.01em}',
@@ -52,7 +61,8 @@ var CSS = [
 	'.ms-section-title{font-size:17px;font-weight:700;margin-bottom:10px;letter-spacing:-.02em}',
 	'.ms-upload-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}',
 	'.ms-upload-left{display:flex;align-items:center;gap:8px}',
-	'.ms-upload-btn{padding:5px 14px;border:1px solid rgba(0,0,0,.1);border-radius:980px;font-size:12px;font-weight:500;cursor:pointer;background:rgba(255,255,255,.8);color:#1d1d1f;transition:all .15s ease}',
+	'.ms-upload-btn{padding:5px 14px;min-width:72px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:980px;font-size:12px;font-weight:500;cursor:pointer;background:rgba(255,255,255,.8);color:#1d1d1f;transition:all .15s ease}',
+	'.ms-toolbar{display:flex;align-items:center;gap:8px;justify-content:flex-end}',
 	'.ms-upload-btn:hover{background:rgba(0,122,255,.08);border-color:rgba(0,122,255,.2);color:#007aff}',
 	'.ms-upload-input{display:none}',
 	'.ms-upload-status{font-size:12px;color:#86868b}',
@@ -61,7 +71,7 @@ var CSS = [
 	'.ms-profile-table{width:100%;border-collapse:collapse;font-size:13px}',	
 	'.ms-profile-table th{text-align:left;padding:8px 12px;font-weight:600;color:#86868b;font-size:12px}',
 	'.ms-profile-table td{padding:8px 12px}',
-	'.ms-act-btns{display:flex;gap:8px}',
+	'.ms-act-btns{display:flex;gap:8px;justify-content:flex-end}',
 	'.ms-act-link{font-size:13px;color:#007aff;cursor:pointer;background:none;border:0;padding:0;font-weight:500;transition:opacity .15s ease}',
 	'.ms-act-link:hover{opacity:.7}',
 	'.ms-act-link.danger{color:#ff453a;background:transparent!important;border:0!important}',
@@ -75,6 +85,10 @@ var CSS = [
 	'.ms-empty{text-align:center;padding:32px;color:#86868b;font-size:13px}',
 	'body.dark .ms-wrap,body[data-theme="dark"] .ms-wrap{color:#f5f5f7}',
 	'body.dark .ms-card,body[data-theme="dark"] .ms-card{background:rgba(30,30,32,.72);box-shadow:0 1px 3px rgba(0,0,0,.2)}',
+	'body.dark .ms-shell-card,body[data-theme="dark"] .ms-shell-card{background:rgba(30,30,32,.72);box-shadow:0 1px 3px rgba(0,0,0,.2)}',
+	'body.dark .ms-shell-head,body[data-theme="dark"] .ms-shell-head{border-bottom-color:rgba(255,255,255,.06)}',
+	'body.dark .ms-shell-row + .ms-shell-row,body[data-theme="dark"] .ms-shell-row + .ms-shell-row{border-top-color:rgba(255,255,255,.06)}',
+	'body.dark .ms-shell-label,body[data-theme="dark"] .ms-shell-label,.ms-shell-value,body[data-theme="dark"] .ms-shell-value{color:#f5f5f7}',
 	'body.dark .ms-switch,body[data-theme="dark"] .ms-switch{background:rgba(255,255,255,.12)}',
 	'body.dark .ms-restart-btn,body[data-theme="dark"] .ms-restart-btn{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);color:#f5f5f7}',
 	'body.dark .ms-status-row + .ms-status-row,body[data-theme="dark"] .ms-status-row + .ms-status-row{border-top-color:rgba(255,255,255,.06)}',
@@ -197,7 +211,7 @@ return view.extend({
 		}, E('div', { 'class': 'ms-knob' }));
 
 		var restartBtn = E('button', {
-			'class': 'ms-restart-btn',
+			'class': 'ms-upload-btn',
 			click: function () {
 				if (!kernelInstalled) {
 					alert('Mihomo 内核未安装。请将内核二进制上传到 /usr/bin/mihomo');
@@ -259,6 +273,9 @@ return view.extend({
 			ui.showModal('校验配置文件：' + profileName, [
 				E('div', { 'class': 'ms-validate-loading', 'id': 'ms-validate-body', style: 'text-align:center;padding:20px;' }, [
 					E('p', {}, '正在校验，请稍候...')
+				]),
+				E('div', { 'class': 'right', style: 'margin-top:12px;' }, [
+					E('button', { 'class': 'btn', click: ui.hideModal }, '关闭')
 				])
 			]);
 			dp.validateProfile(profileName).then(function (r) {
@@ -339,13 +356,15 @@ return view.extend({
 					]),
 					E('td', {}, dp.formatSize(p.size)),
 					E('td', {}, dp.formatTime(p.mtime)),
-					E('td', {}, E('div', { 'class': 'ms-act-btns' }, [
+					E('td', { style: 'text-align:right' }, E('div', { 'class': 'ms-act-btns' }, [
 						E('button', {
 							'class': 'ms-act-link',
+							style: 'color:#1d1d1f',
 							click: function () { openEditModal(p.name); }
 						}, '编辑'),
 						isCurrent ? '' : E('button', {
-							'class': 'ms-act-link primary',
+							'class': 'ms-act-link',
+							style: 'color:#1d1d1f',
 							click: function () {
 								if (!confirm('选用 ' + p.name + ' 作为当前配置？')) return;
 								dp.selectProfile(p.name).then(function (r) {
@@ -361,11 +380,12 @@ return view.extend({
 						}, '选用'),
 						E('button', {
 							'class': 'ms-act-link',
-							style: 'color:#ff9500',
+							style: 'color:#1d1d1f',
 							click: function () { openValidateModal(p.name); }
 						}, '校验'),
 						E('button', {
 							'class': 'ms-act-link',
+							style: 'color:#1d1d1f',
 							click: function () { downloadProfile(p.name); }
 						}, '下载'),
 						E('button', {
@@ -391,7 +411,7 @@ return view.extend({
 					E('th', {}, '文件名'),
 					E('th', {}, '大小'),
 					E('th', {}, '修改时间'),
-					E('th', { style: 'width:240px' }, '操作')
+					E('th', { style: 'width:240px;text-align:right' }, '操作')
 				])),
 				E('tbody', {}, rows)
 			]);
@@ -533,85 +553,56 @@ return view.extend({
 		}
 
 		var dashboardBtnFoot = E('button', {
-			'class': 'ms-check-btn',
+			'class': 'ms-upload-btn',
 			click: function () { openDashboard(); }
 		}, '打开面板');
 
 		var pageEl = E('div', { 'class': 'ms-wrap' }, [
 			E('style', CSS),
 
-			E('div', { 'class': 'ms-grid' }, [
-				/* 左侧：服务状态 */
-				E('div', { 'class': 'ms-col' }, [
-					E('div', { 'class': 'ms-card' }, [
-						E('div', { 'class': 'ms-svc-section' }, [
-							E('div', { 'class': 'ms-svc-row' }, [
-								E('span', { 'class': 'ms-svc-name' }, 'MHTools 服务'),
-								E('div', { 'class': 'ms-svc-actions' }, [
-									switchEl,
-									restartBtn
-								])
-							])
-						]),
-						E('div', { 'class': 'ms-status-row' }, [
-							E('span', { 'class': 'ms-status-label' }, '运行状态'),
-							E('div', { style: 'display:flex;align-items:center;gap:8px;' }, [
-								mihomoStatusEl,
-								foreignEl
-							])
-						]),
-						E('div', { 'class': 'ms-profile-row' }, [
-							E('span', { 'class': 'ms-profile-label' }, '当前配置'),
-							E('span', {
-								'class': 'ms-profile-val' + (currentProfile ? '' : ' empty'),
-								title: currentProfile || '未选择'
-							}, currentProfile || '未选择')
-						]),
-						E('div', { 'class': 'ms-version-foot', style: 'padding-top:14px;' }, [
-							E('div', { style: 'display:flex;align-items:center;gap:6px;' }, [
-								E('span', { style: 'font-size:11px;color:#86868b;' }, 'MHTools'),
-								E('span', {
-									'class': 'ms-ver-num' + (appInfo.upgradable ? ' has-update' : ''),
-									id: 'ms-app-ver',
-									title: appInfo.app_version || '未知'
-								}, appInfo.app_version ? ('v' + appInfo.app_version) : '未知'),
-								appInfo.upgradable ? E('span', {
-									style: 'font-size:10px;padding:1px 6px;border-radius:980px;background:rgba(255,149,0,.15);color:#ff9500;font-weight:600;'
-								}, '更新 v' + appInfo.latest_version) : ''
-							]),
-							E('div', { 'class': 'ms-foot-btns' }, [
-								E('button', {
-									'class': 'ms-ver-btn',
-									id: 'ms-check-update-btn',
-									click: function () { checkAppUpdate(appInfo); }
-								}, appInfo.upgradable ? '立即更新' : '检查更新')
-							])
-						])
+			E('div', { 'class': 'ms-shell-card' }, [
+				E('div', { 'class': 'ms-shell-head' }, [
+					E('span', { 'class': 'ms-shell-title' }, 'MHTools 服务'),
+					E('div', { 'class': 'ms-shell-actions' }, [
+						switchEl,
+						restartBtn
 					])
 				]),
-
-				/* 右侧：内核信息 */
-				E('div', { 'class': 'ms-col' }, [
-					E('div', { 'class': 'ms-card' }, [
-						E('div', { 'class': 'ms-kernel-head' }, [
-							E('span', { 'class': 'ms-kernel-title' }, '内核')
+				E('div', { 'class': 'ms-shell-body' }, [
+					E('div', { 'class': 'ms-shell-row' }, [
+						E('span', { 'class': 'ms-shell-label' }, '运行状态'),
+						E('div', { 'class': 'ms-shell-meta' }, [
+							mihomoStatusEl,
+							foreignEl
+						])
+					]),
+					E('div', { 'class': 'ms-shell-row' }, [
+						E('div', { style: 'display:flex;align-items:center;gap:8px' }, [
+							E('span', { 'class': 'ms-shell-label' }, '版本'),
+							E('span', {
+								'class': 'ms-ver-num' + (appInfo.upgradable ? ' has-update' : ''),
+								id: 'ms-app-ver',
+								title: appInfo.app_version || '未知'
+							}, appInfo.app_version ? ('v' + appInfo.app_version) : '未知')
 						]),
-						E('div', { 'class': 'ms-ver-row' }, [
-							E('span', { 'class': 'ms-ver-label' }, runningVer ? '运行版本' : '内核版本'),
+						E('div', { 'class': 'ms-shell-actions' }, [
+							E('button', {
+								'class': 'ms-upload-btn',
+								id: 'ms-check-update-btn',
+								click: function () { checkAppUpdate(appInfo); }
+							}, appInfo.upgradable ? '立即更新' : '检查更新')
+						])
+					]),
+					E('div', { 'class': 'ms-shell-row' }, [
+						E('div', { style: 'display:flex;align-items:center;gap:8px' }, [
+							E('span', { 'class': 'ms-shell-label' }, '内核版本'),
 							E('span', {
 								'class': 'ms-ver-num' + (!kernelInstalled ? ' has-update' : ''),
 								title: displayVer
 							}, kernelInstalled ? (displayVerShort || '已安装') : '未安装')
 						]),
-						E('div', { 'class': 'ms-version-foot' }, [
-							E('span', {}, !kernelInstalled ? '⚠ 内核未安装（上传到 /usr/bin/mihomo）' : (runningVer ? '内核运行中' : '内核已安装')),
-							E('div', { 'class': 'ms-foot-btns' }, [
-								dashboardBtnFoot,
-								E('button', {
-									'class': 'ms-check-btn',
-									click: function () { openResetModal(); }
-								}, '重置默认')
-							])
+						E('div', { 'class': 'ms-toolbar' }, [
+							dashboardBtnFoot
 						])
 					])
 				])
@@ -624,6 +615,10 @@ return view.extend({
 					E('div', { 'class': 'ms-upload-left' }, [
 						uploadStatusEl,
 						hiddenInput,
+						E('button', {
+							'class': 'ms-upload-btn',
+							click: function () { openResetModal(); }
+						}, '重置默认'),
 						E('button', {
 							'class': 'ms-upload-btn',
 							click: function () { document.getElementById('ms-upload-file').click(); }
