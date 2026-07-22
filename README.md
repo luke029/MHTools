@@ -1,79 +1,79 @@
 # MHTools
 
-OpenWrt / ImmortalWrt 上管理 [mihomo](https://github.com/MetaCubeX/mihomo) 代理的 LuCI 应用。
+MHTools 是一个面向 OpenWrt / ImmortalWrt 的轻量级 LuCI 管理器。
 
-本项目当前采用“轻量 LuCI 管理层 + 外部 mihomo 内核”的实现方式：
-- LuCI 页面只负责上传 YAML、启动/停止、状态和日志
-- `mihomo` 二进制保持外置
+当前实现方式为：
+- LuCI 页面只负责上传、启动、停止、查看日志
+- 真正的代理执行内核使用外部 `mihomo`
+- 配置文件使用单一 YAML
 - 运行时依赖通过系统包管理器自动补齐
-- 不再把内核打进包里，也不再依赖复杂 SDK 编译链
+
+这不是一个“把内核打进包里”的编译产品，而是一个“薄 LuCI + 外部内核”的轻量发布方案。
+
+## 版本说明
+
+- `v2.1.0`
+  - 统一收敛为当前架构：`apk` 依赖装配 + 外部 `mihomo` 二进制
+  - 移除对复杂 SDK / 编译链的依赖
+  - 保持安装体验简洁，UI 只做最小管理功能
 
 ## 安装
 
-```bash
-# 下载并解压
+```sh
 wget https://github.com/luke029/MHTools/releases/latest/download/mhtools-v2.1.0.tar.gz
-tar xzf mhtools-v2.1.0.tar.gz
 
-# 一键安装（自动处理依赖）
+tar xzf mhtools-v2.1.0.tar.gz
+cd MHTools
 sh install.sh
 ```
 
-`install.sh` 会自动：
-- 通过当前系统包管理器安装基础依赖（`apk` 优先）：`kmod-tun`、`nftables`、`python3-yaml`、`ca-certificates`、`wget-ssl`、`curl`
-- 复用已有 `/usr/bin/mihomo`；若不存在则尝试下载对应架构的二进制
-- 拷贝所有文件、注册服务，并生成安装清单 `/usr/share/mhtools/manifest`
+## 安装脚本会做什么
 
-如果你要下载 `alpha` 内核版本，可以在安装前设置：
+`install.sh` 会自动完成以下动作：
+- 检测当前系统是否为 OpenWrt / ImmortalWrt
+- 通过当前包管理器补齐基础依赖
+  - `kmod-tun`
+  - `nftables`
+  - `python3-yaml`
+  - `ca-certificates`
+  - `wget-ssl`
+  - `curl`
+- 优先复用已有 `/usr/bin/mihomo`
+- 如未找到，则尝试从外部镜像下载安装对应架构的 `mihomo` 二进制
+- 拷贝 LuCI 页面与系统脚本，注册服务，并生成卸载清单
+
+如果你要使用 `alpha` 版本内核，可以在安装前设置：
 
 ```sh
 MIHOMO_CHANNEL=alpha MIHOMO_VER=vX.Y.Z-alpha sh install.sh
 ```
 
+## 使用方式
+
+1. 打开 LuCI → Services → MHTools
+2. 上传你的 `mihomo` 配置文件（`.yaml`）
+3. 启动服务
+4. 通过日志页面查看运行输出
+
 ## 卸载
 
-```bash
+```sh
 sh uninstall.sh
 ```
 
-`uninstall.sh` 依据安装清单精确移除 MHTools 自有文件、停止并禁用服务、清理运行时数据目录。
-> 注意：mihomo 内核为外部依赖，默认保留；仅当它是安装时创建的软链时才会被移除。
+卸载脚本会依据安装时生成的清单移除本项目的文件、停止并禁用服务、清理运行时目录。
 
-## 手动打包
+> 注意：`mihomo` 二进制属于外部依赖，不会强制删除；只有安装时创建的软链才会被清理。
 
-```bash
-tar czf mhtools-vX.X.X.tar.gz install.sh uninstall.sh luci-app-mhtools/
-```
+## 目录概览
 
-## 目录结构
-
-```
+```text
 MHTools/
 ├── VERSION
-├── install.sh                         # 安装脚本
-├── uninstall.sh                       # 卸载脚本（依据安装清单精确清理）
+├── install.sh
+├── uninstall.sh
 └── luci-app-mhtools/
-    ├── htdocs/                        # LuCI 前端页面
-    └── root/
-        ├── etc/config/mhtools          # UCI 配置定义
-        ├── etc/init.d/mhtools          # 服务管理脚本
-        ├── etc/uci-defaults/           # 首次安装初始化
-        └── usr/
-            ├── libexec/mhtools-wrapper # 权限代理
-            └── share/
-                ├── luci/menu.d/        # 菜单注册
-                └── rpcd/               # Lua → ucode 中间层
 ```
-
-## 使用
-
-1. 打开 LuCI → Services → MHTools
-2. 上传 mihomo 配置文件（`.yaml`）
-3. 启用并启动服务
-
-## 依赖
-
-安装脚本自动处理所有依赖，无需手动安装。
 
 ## License
 
