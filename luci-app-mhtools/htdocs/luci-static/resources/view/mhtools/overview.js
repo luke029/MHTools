@@ -104,7 +104,8 @@ return view.extend({
 			uci.load('mhtools'),
 			dp.version(),
 			dp.status(),
-			dp.listProfiles()
+			dp.listProfiles(),
+			dp.getAppInfo()
 		]);
 	},
 
@@ -112,6 +113,7 @@ return view.extend({
 		var version = data[1] || {};
 		var status = data[2] || { running: false };
 		var profiles = data[3] || [];
+		var appInfo = data[4] || {};
 
 		function escapeHtml(s) {
 			return ('' + (s == null ? '' : s))
@@ -461,6 +463,75 @@ return view.extend({
 			});
 		}
 
+		// ===== 检查应用更新 =====
+		function checkAppUpdate(currentInfo) {
+			var btn = document.getElementById('ms-check-update-btn');
+			var verEl = document.getElementById('ms-app-ver');
+
+			// 如果 opkg/apk 已经发现有更新
+			if (currentInfo && currentInfo.upgradable) {
+				if (!confirm('发现新版本 v' + currentInfo.latest_version + '（当前 v' + (currentInfo.app_version || '未知') + '）\n\n是否立即通过 ' + currentInfo.pkg_manager + ' 升级？')) return;
+				if (btn) { btn.disabled = true; btn.textContent = '升级中...'; }
+				ui.showModal('升级 MHTools', [
+					E('p', { style: 'text-align:center;' }, '正在通过 ' + (currentInfo.pkg_manager || '包管理器') + ' 升级，请稍候...')
+				]);
+				// 调用后端执行升级
+				dp.upgradeApp().then(function (r) {
+					ui.hideModal();
+					if (r && r.success) {
+						alert('升级成功！页面将刷新。');
+						setTimeout(function () { location.reload(); }, 1000);
+					} else {
+						alert('升级失败：' + ((r && r.error) || '请前往 系统→软件包 手动升级'));
+						if (btn) { btn.disabled = false; btn.textContent = '立即更新'; }
+					}
+				}).catch(function (e) {
+					ui.hideModal();
+					alert('升级请求失败：' + (e?.message || '请前往 系统→软件包 手动升级'));
+					if (btn) { btn.disabled = false; btn.textContent = '立即更新'; }
+				});
+				return;
+			}
+
+			// opkg/apk 没发现更新，尝试从 GitHub 查询
+			if (btn) { btn.disabled = true; btn.textContent = '查询中...'; }
+			fetch('https://api.github.com/repos/luke029/MHTools/releases/latest', { cache: 'no-cache' })
+				.then(function (resp) { return resp.json(); })
+				.then(function (release) {
+					if (btn) { btn.disabled = false; btn.textContent = '检查更新'; }
+					var remoteVer = (release && release.tag_name) ? release.tag_name.replace(/^v/, '') : '';
+					if (!remoteVer) {
+						alert('未能获取最新版本信息。\n请前往 系统→软件包 检查更新。');
+						return;
+					}
+					var localVer = (currentInfo && currentInfo.app_version) || '0';
+					if (compareVersion(remoteVer, localVer) > 0) {
+						if (confirm('发现新版本 v' + remoteVer + '（当前 v' + localVer + '）\n\n请在 系统→软件包 中更新，或前往 GitHub 下载。\n\n是否前往 GitHub 查看？')) {
+							window.open(release.html_url || 'https://github.com/luke029/MHTools/releases', '_blank');
+						}
+						if (verEl) { verEl.className = 'ms-ver-num has-update'; verEl.title = '最新: v' + remoteVer; }
+					} else {
+						alert('已是最新版本 v' + localVer);
+					}
+				}).catch(function () {
+					if (btn) { btn.disabled = false; btn.textContent = '检查更新'; }
+					alert('无法连接 GitHub，请前往 系统→软件包 检查更新。');
+				});
+		}
+
+		// 简单版本号比较
+		function compareVersion(a, b) {
+			var pa = (a || '0').split('.');
+			var pb = (b || '0').split('.');
+			for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+				var na = parseInt(pa[i] || '0', 10);
+				var nb = parseInt(pb[i] || '0', 10);
+				if (na > nb) return 1;
+				if (na < nb) return -1;
+			}
+			return 0;
+		}
+
 		var dashboardBtnFoot = E('button', {
 			'class': 'ms-check-btn',
 			click: function () { openDashboard(); }
@@ -495,6 +566,26 @@ return view.extend({
 								'class': 'ms-profile-val' + (currentProfile ? '' : ' empty'),
 								title: currentProfile || '未选择'
 							}, currentProfile || '未选择')
+						]),
+						E('div', { 'class': 'ms-version-foot', style: 'padding-top:14px;' }, [
+							E('div', { style: 'display:flex;align-items:center;gap:6px;' }, [
+								E('span', { style: 'font-size:11px;color:#86868b;' }, 'MHTools'),
+								E('span', {
+									'class': 'ms-ver-num' + (appInfo.upgradable ? ' has-update' : ''),
+									id: 'ms-app-ver',
+									title: appInfo.app_version || '未知'
+								}, appInfo.app_version ? ('v' + appInfo.app_version) : '未知'),
+								appInfo.upgradable ? E('span', {
+									style: 'font-size:10px;padding:1px 6px;border-radius:980px;background:rgba(255,149,0,.15);color:#ff9500;font-weight:600;'
+								}, '更新 v' + appInfo.latest_version) : ''
+							]),
+							E('div', { 'class': 'ms-foot-btns' }, [
+								E('button', {
+									'class': 'ms-ver-btn',
+									id: 'ms-check-update-btn',
+									click: function () { checkAppUpdate(appInfo); }
+								}, appInfo.upgradable ? '立即更新' : '检查更新')
+							])
 						])
 					])
 				]),

@@ -114,6 +114,18 @@ const callMhtoolsReset = rpc.declare({
 	expect: { '': {} }
 });
 
+const callMhtoolsGetAppInfo = rpc.declare({
+	object: 'luci.mhtools',
+	method: 'get_app_info',
+	expect: { '': {} }
+});
+
+const callMhtoolsUpgradeApp = rpc.declare({
+	object: 'luci.mhtools',
+	method: 'upgrade_app',
+	expect: { '': {} }
+});
+
 const profilesDir = '/etc/mhtools/profiles';
 
 return baseclass.extend({
@@ -187,6 +199,14 @@ return baseclass.extend({
 
 	reset: function () {
 		return callMhtoolsReset();
+	},
+
+	getAppInfo: function () {
+		return callMhtoolsGetAppInfo();
+	},
+
+	upgradeApp: function () {
+		return callMhtoolsUpgradeApp();
 	},
 
 	formatSize: function (bytes) {

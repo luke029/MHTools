@@ -36,6 +36,9 @@ cp -f "$SRC/htdocs/luci-static/resources/tools/mhtools.js"  /www/luci-static/res
 cp -f "$SRC/htdocs/luci-static/resources/view/mhtools/overview.js" /www/luci-static/resources/view/mhtools/overview.js
 cp -f "$SRC/htdocs/luci-static/resources/view/mhtools/log.js"      /www/luci-static/resources/view/mhtools/log.js
 
+# --- 写入项目版本号 ---
+echo "2.0.0" > /etc/mhtools/version
+
 # --- 权限 ---
 chmod +x /etc/init.d/mhtools
 chmod +x /usr/libexec/mhtools-wrapper
@@ -52,6 +55,9 @@ rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null || true
 # --- 启用服务 ---
 /etc/init.d/mhtools enable 2>/dev/null || true
 /etc/init.d/rpcd restart 2>/dev/null || true
+
+# --- 更新资源版本号（强制浏览器刷新JS缓存） ---
+touch /lib/apk/db/installed 2>/dev/null || true
 
 echo ""
 echo "=== 安装完成 ==="

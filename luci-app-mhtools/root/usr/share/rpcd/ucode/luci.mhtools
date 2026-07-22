@@ -474,6 +474,80 @@ const methods = {
 			appendLog('reset', '已清空所有配置文件');
 			return { success: true, message: '已清空所有配置。请上传配置文件后启动服务。' };
 		}
+	},
+
+	get_app_info: {
+		call: function () {
+			// 读取 MHTools 自身版本
+			let appVersion = '';
+			let versionFile = '/etc/mhtools/version';
+			if (access(versionFile, 'r')) {
+				appVersion = trim(readfile(versionFile));
+			}
+
+			// 检查包管理器升级
+			let upgradable = false;
+			let latestVersion = '';
+			let pkgManager = 'unknown';
+
+			// 尝试 opkg
+			if (system('command -v opkg') == 0) {
+				pkgManager = 'opkg';
+				let proc = popen('opkg list-upgradable 2>/dev/null | grep luci-app-mhtools');
+				if (proc) {
+					let out = trim(proc.read('all'));
+					proc.close();
+					if (out) {
+						upgradable = true;
+						// opkg 输出格式: luci-app-mhtools - 2.1.0-r1
+						let m = match(out, /luci-app-mhtools\s*-\s*(\S+)/);
+						if (m) latestVersion = m[1];
+						else latestVersion = 'new';
+					}
+				}
+			}
+			// 尝试 apk (OpenWrt 25.x+)
+			if (!upgradable && system('command -v apk') == 0) {
+				pkgManager = 'apk';
+				let proc = popen('apk list -u 2>/dev/null | grep luci-app-mhtools');
+				if (proc) {
+					let out = trim(proc.read('all'));
+					proc.close();
+					if (out) {
+						upgradable = true;
+						let m = match(out, /luci-app-mhtools-(\S+)/);
+						if (m) latestVersion = m[1];
+						else latestVersion = 'new';
+					}
+				}
+			}
+
+			return {
+				app_version: appVersion,
+				upgradable: upgradable,
+				latest_version: latestVersion,
+				pkg_manager: pkgManager
+			};
+		}
+	},
+
+	upgrade_app: {
+		call: function () {
+			let pkgManager = 'unknown';
+			let rc = -1;
+			if (system('command -v opkg') == 0) {
+				pkgManager = 'opkg';
+				rc = system('opkg update 2>/dev/null && opkg upgrade luci-app-mhtools 2>&1');
+			} else if (system('command -v apk') == 0) {
+				pkgManager = 'apk';
+				rc = system('apk update 2>/dev/null && apk add --upgrade luci-app-mhtools 2>&1');
+			}
+			if (rc == 0) {
+				appendLog('upgrade', '通过 ' + pkgManager + ' 升级成功');
+				return { success: true, message: '升级成功' };
+			}
+			return { success: false, error: '请前往 系统→软件包 手动升级，或执行 ' + pkgManager + ' update && ' + pkgManager + ' upgrade luci-app-mhtools' };
+		}
 	}
 };
 

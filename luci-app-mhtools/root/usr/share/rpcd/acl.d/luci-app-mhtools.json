@@ -18,7 +18,8 @@
 					"fetch_subscription",
 					"get_subscriptions",
 					"update_panel",
-					"get_mirror_latency"
+					"get_mirror_latency",
+					"get_app_info"
 				]
 			},
 			"uci": [
@@ -68,7 +69,9 @@
 					"save_subscriptions",
 					"get_subscriptions",
 					"update_panel",
-					"get_mirror_latency"
+					"get_mirror_latency",
+					"get_app_info",
+					"upgrade_app"
 				]
 			},
 			"uci": [
