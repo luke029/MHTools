@@ -47,35 +47,6 @@ return view.extend({
 		var appLogPre = E('pre', { id: 'ms-app-log-content' }, '加载中...');
 		var kernelLogPre = E('pre', { id: 'ms-kernel-log-content' }, '');
 
-		var lineSelect = E('select', {
-			change: function () {
-				lineCount = parseInt(this.value);
-				loadLog();
-			}
-		}, [
-			E('option', { value: '100' }, '100 行'),
-			E('option', { value: '300', selected: 'selected' }, '300 行'),
-			E('option', { value: '500' }, '500 行'),
-			E('option', { value: '1000' }, '1000 行'),
-			E('option', { value: '2000' }, '2000 行')
-		]);
-
-		var autoRefreshCb = E('input', {
-			type: 'checkbox',
-			checked: 'checked',
-			change: function () {
-				autoRefresh = this.checked;
-			}
-		});
-
-		var limitInput = E('input', {
-			type: 'number',
-			min: '10',
-			max: '10240',
-			value: logSizeLimit,
-			style: 'width:56px;padding:3px 6px;font-size:12px;border:1px solid rgba(128,128,128,.2);border-radius:6px;text-align:center;'
-		});
-
 		function renderLogContent(text, pre) {
 			if (!text || text.trim() === '') {
 				pre.textContent = '（暂无日志）';
@@ -86,7 +57,7 @@ return view.extend({
 		}
 
 		function loadLog() {
-			dp.getAllLogs(lineCount).then(function (r) {
+			dp.getAllLogs(300).then(function (r) {
 				if (r) {
 					renderLogContent(r.app_log, appLogPre);
 					renderLogContent(r.kernel_log, kernelLogPre);
@@ -109,16 +80,30 @@ return view.extend({
 			});
 		}
 
-		function saveLimit() {
-			var val = limitInput.value || '300';
-			uci.set('mhtools', 'core', 'log_size_limit', val);
-			uci.apply();
+		function downloadLog() {
+			dp.getAllLogs(5000).then(function (r) {
+				var text = '';
+				if (r) {
+					if (r.app_log) text += '===== 应用日志 =====\n' + r.app_log + '\n\n';
+					if (r.kernel_log) text += '===== 内核日志 =====\n' + r.kernel_log;
+				}
+				if (!text) text = '（暂无日志）';
+				var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+				var a = document.createElement('a');
+				a.href = URL.createObjectURL(blob);
+				a.download = 'mhtools-log-' + new Date().toISOString().slice(0, 10) + '.txt';
+				a.style.display = 'none';
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(a.href);
+			}).catch(function () {
+				alert('下载日志失败');
+			});
 		}
 
 		poll.add(function () {
-			if (autoRefresh) {
-				loadLog();
-			}
+			loadLog();
 		});
 
 		loadLog();
@@ -128,32 +113,14 @@ return view.extend({
 			E('div', { 'class': 'ms-log-head' }, [
 				E('div', { 'class': 'ms-log-title' }, '系统日志'),
 				E('div', { 'class': 'ms-log-tools' }, [
-					E('div', { 'class': 'ms-log-lines' }, [
-						'显示',
-						lineSelect
-					]),
 					E('button', {
 						'class': 'ms-btn',
-						click: function () { loadLog(); }
-					}, '刷新'),
+						click: function () { downloadLog(); }
+					}, '下载日志'),
 					E('button', {
-						'class': 'ms-btn',
+						'class': 'ms-btn danger',
 						click: function () { clearLog(); }
-					}, '清空日志'),
-					E('label', { 'class': 'ms-auto-refresh' }, [
-						autoRefreshCb,
-						'自动刷新'
-					]),
-					E('span', { style: 'font-size:13px;color:#6e6e73;display:flex;align-items:center;gap:4px;' }, [
-						'超过',
-						limitInput,
-						'KB 清除',
-						E('button', {
-							'class': 'ms-btn',
-							style: 'padding:4px 10px;font-size:11px;',
-							click: function () { saveLimit(); }
-						}, '保存')
-					])
+					}, '清空日志')
 				])
 			]),
 			E('div', { 'class': 'ms-log-section' }, [
